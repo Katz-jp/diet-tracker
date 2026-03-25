@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { ServingsStepper } from '@/components/ServingsStepper';
 import { addRecipe, deleteRecipe, subscribeRecipes } from '@/lib/firestore';
+import { snapServingsToQuarter } from '@/lib/servingsInput';
 import type { Recipe, RecipeKind } from '@/types';
 
 export function RecipesPage() {
@@ -42,7 +44,7 @@ export function RecipesPage() {
       await addRecipe(uid, {
         kind: formKind,
         name: name.trim(),
-        servings: Math.max(0.25, servings),
+        servings: snapServingsToQuarter(servings),
         calories: Number(calories) || 0,
         protein: Number(protein) || 0,
         fat: Number(fat) || 0,
@@ -115,17 +117,13 @@ export function RecipesPage() {
           <label htmlFor="rn">レシピ名</label>
           <input id="rn" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div className="field">
-          <label htmlFor="rs">人数（1食分の基準）</label>
-          <input
-            id="rs"
-            type="number"
-            min={0.25}
-            step={0.25}
-            value={servings}
-            onChange={(e) => setServings(Number(e.target.value) || 1)}
-          />
-        </div>
+        <ServingsStepper
+          id="rs"
+          label="人数（1食分の基準）"
+          value={servings}
+          onChange={setServings}
+          hint="0.25 刻み（−／＋で変更）"
+        />
         <div className="field">
           <label htmlFor="rc">カロリー (kcal) 合計</label>
           <input

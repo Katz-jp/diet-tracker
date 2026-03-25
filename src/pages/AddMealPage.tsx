@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/authStore';
+import { ServingsStepper } from '@/components/ServingsStepper';
 import { addMealLog, subscribeRecipes } from '@/lib/firestore';
+import { snapServingsToQuarter } from '@/lib/servingsInput';
 import { estimateCookingFromText, estimateRestaurantMenu } from '@/lib/openai';
 import type { MealTiming, MealType, Recipe } from '@/types';
 
@@ -72,12 +74,16 @@ export function AddMealPage() {
   );
 
   useEffect(() => {
+    setRecipeServings(1);
+  }, [recipeId]);
+
+  useEffect(() => {
     if (!selectedRecipe) {
       setNut(emptyNutrition);
       return;
     }
     const per = selectedRecipe.servings > 0 ? 1 / selectedRecipe.servings : 1;
-    const scale = per * recipeServings;
+    const scale = per * snapServingsToQuarter(recipeServings);
     setNut({
       name: selectedRecipe.name,
       calories: selectedRecipe.calories * scale,
@@ -335,17 +341,13 @@ export function AddMealPage() {
                     ))}
                   </select>
                 </div>
-                <div className="field">
-                  <label htmlFor="rs">食べた人数（倍率）</label>
-                  <input
-                    id="rs"
-                    type="number"
-                    min={0.25}
-                    step={0.25}
-                    value={recipeServings}
-                    onChange={(e) => setRecipeServings(Number(e.target.value) || 1)}
-                  />
-                </div>
+                <ServingsStepper
+                  id="meal-rs"
+                  label="食べた人数（倍率）"
+                  value={recipeServings}
+                  onChange={setRecipeServings}
+                  hint="0.25 刻み（−／＋で変更）"
+                />
               </>
             )}
           </div>
