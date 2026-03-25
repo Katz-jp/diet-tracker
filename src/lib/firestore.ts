@@ -14,7 +14,9 @@ import {
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { getDb } from '@/lib/firebase';
+import { deleteBodyPhotoFolder, uploadBodyPhoto } from '@/lib/storage';
 import type {
+  BodyPhotoSet,
   MealIngredient,
   MealLog,
   MealTiming,
@@ -311,4 +313,62 @@ export async function addRecipe(
 
 export async function deleteRecipe(uid: string, recipeId: string): Promise<void> {
   await deleteDoc(doc(getDb(), 'users', uid, 'recipes', recipeId));
+}
+
+export function subscribeBodyPhotoSets(
+  uid: string,
+  onSets: (sets: BodyPhotoSet[]) => void
+): Unsubscribe {
+  const db = getDb();
+  return onSnapshot(collection(db, 'users', uid, 'bodyPhotoSets'), (snap) => {
+    const list: BodyPhotoSet[] = snap.docs.map((d) => {
+      const m = d.data();
+      return {
+        id: d.id,
+        date: m.date as string,
+        frontUrl: m.frontUrl as string,
+        sideUrl: m.sideUrl as string,
+        backUrl: m.backUrl as string,
+        updatedAt: tsToDate(m.updatedAt),
+      };
+    });
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    onSets(list);
+  });
+}
+
+export async function saveBodyPhotoSet(
+  uid: string,
+  date: string,
+  files: { front?: File; side?: File; back?: File },
+  existing: BodyPhotoSet | null
+): Promise<void> {
+  let frontUrl = existing?.frontUrl ?? '';
+  let sideUrl = existing?.sideUrl ?? '';
+  let backUrl = existing?.backUrl ?? '';
+  if (files.front) {
+    frontUrl = await uploadBodyPhoto(uid, date, 'front', files.front);
+  }
+  if (files.side) {
+    sideUrl = await uploadBodyPhoto(uid, date, 'side', files.side);
+  }
+  if (files.back) {
+    backUrl = await uploadBodyPhoto(uid, date, 'back', files.back);
+  }
+  if (!frontUrl || !sideUrl || !backUrl) {
+    throw new Error('正面・横・後ろの3枚すべて必要です（未登録の角度は写真を選んでください）。');
+  }
+  const db = getDb();
+  await setDoc(doc(db, 'users', uid, 'bodyPhotoSets', date), {
+    date,
+    frontUrl,
+    sideUrl,
+    backUrl,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteBodyPhotoSet(uid: string, date: string): Promise<void> {
+  await deleteBodyPhotoFolder(uid, date);
+  await deleteDoc(doc(getDb(), 'users', uid, 'bodyPhotoSets', date));
 }

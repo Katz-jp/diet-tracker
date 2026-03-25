@@ -49,6 +49,16 @@ export interface WeightLog {
   createdAt: Date;
 }
 
+/** グラフ画面で記録する体型写真（正面・横・後ろ） */
+export interface BodyPhotoSet {
+  id: string;
+  date: string;
+  frontUrl: string;
+  sideUrl: string;
+  backUrl: string;
+  updatedAt: Date;
+}
+
 export interface SizeLog {
   id: string;
   date: string;

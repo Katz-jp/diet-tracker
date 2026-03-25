@@ -1,11 +1,13 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig, isFirebaseConfigured as configured } from '@/env';
 
 let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
 let cachedDb: Firestore | null = null;
+let cachedStorage: FirebaseStorage | null = null;
 
 function getApp(): FirebaseApp {
   if (cachedApp) {
@@ -33,6 +35,14 @@ export function getDb(): Firestore {
   }
   cachedDb = getFirestore(getApp());
   return cachedDb;
+}
+
+export function getFirebaseStorage(): FirebaseStorage {
+  if (cachedStorage) {
+    return cachedStorage;
+  }
+  cachedStorage = getStorage(getApp());
+  return cachedStorage;
 }
 
 export function isFirebaseConfigured(): boolean {
