@@ -1,0 +1,100 @@
+export type MealTiming = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export type MealType = 'restaurant' | 'cooking' | 'recipe';
+
+export interface UserProfile {
+  displayName: string;
+  email: string;
+  createdAt: Date;
+}
+
+export interface UserGoals {
+  targetWeight: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+}
+
+export interface MealIngredient {
+  name: string;
+  grams: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+}
+
+export interface MealLog {
+  id: string;
+  date: string;
+  timing: MealTiming;
+  name: string;
+  type: MealType;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  ingredients: MealIngredient[];
+  createdAt: Date;
+}
+
+export interface WeightLog {
+  id: string;
+  date: string;
+  weight: number;
+  createdAt: Date;
+}
+
+export interface SizeLog {
+  id: string;
+  date: string;
+  waist?: number;
+  hip?: number;
+  thigh?: number;
+  arm?: number;
+  chest?: number;
+  notes?: string;
+  createdAt: Date;
+}
+
+/** 保存レシピの分類（食事追加の「いつもの自炊／いつもの外食」に対応） */
+export type RecipeKind = 'cooking' | 'restaurant';
+
+export interface Recipe {
+  id: string;
+  kind: RecipeKind;
+  name: string;
+  servings: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  note?: string;
+  createdAt: Date;
+}
+
+export interface RestaurantEstimate {
+  name: string;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  note: string;
+}
+
+export interface CookingEstimate {
+  name: string;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  note: string;
+  ingredients?: MealIngredient[];
+}

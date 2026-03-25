@@ -1,0 +1,314 @@
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  where,
+  type Unsubscribe,
+} from 'firebase/firestore';
+import type { User } from 'firebase/auth';
+import { getDb } from '@/lib/firebase';
+import type {
+  MealIngredient,
+  MealLog,
+  MealTiming,
+  MealType,
+  Recipe,
+  RecipeKind,
+  SizeLog,
+  UserGoals,
+  UserProfile,
+} from '@/types';
+
+const defaultGoals: UserGoals = {
+  targetWeight: 65,
+  calories: 2000,
+  protein: 120,
+  fat: 60,
+  carbs: 250,
+  fiber: 25,
+};
+
+function tsToDate(v: unknown): Date {
+  if (v instanceof Timestamp) {
+    return v.toDate();
+  }
+  if (v instanceof Date) {
+    return v;
+  }
+  return new Date();
+}
+
+export async function ensureUserDocument(user: User): Promise<void> {
+  const db = getDb();
+  const ref = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    return;
+  }
+  await setDoc(ref, {
+    profile: {
+      displayName: user.displayName ?? '',
+      email: user.email ?? '',
+      createdAt: serverTimestamp(),
+    },
+    goals: defaultGoals,
+  });
+}
+
+export function subscribeUserGoals(uid: string, onGoals: (goals: UserGoals) => void): Unsubscribe {
+  const db = getDb();
+  return onSnapshot(doc(db, 'users', uid), (snap) => {
+    const data = snap.data();
+    const g = data?.goals as UserGoals | undefined;
+    onGoals(g ?? defaultGoals);
+  });
+}
+
+export function subscribeUserProfile(
+  uid: string,
+  onProfile: (profile: UserProfile | null) => void
+): Unsubscribe {
+  const db = getDb();
+  return onSnapshot(doc(db, 'users', uid), (snap) => {
+    const data = snap.data();
+    const p = data?.profile as
+      | { displayName?: string; email?: string; createdAt?: Timestamp }
+      | undefined;
+    if (!p) {
+      onProfile(null);
+      return;
+    }
+    onProfile({
+      displayName: p.displayName ?? '',
+      email: p.email ?? '',
+      createdAt: tsToDate(p.createdAt),
+    });
+  });
+}
+
+export async function saveGoals(uid: string, goals: UserGoals): Promise<void> {
+  const db = getDb();
+  await setDoc(doc(db, 'users', uid), { goals }, { merge: true });
+}
+
+export function subscribeMealsForDate(
+  uid: string,
+  dateStr: string,
+  onMeals: (meals: MealLog[]) => void
+): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'users', uid, 'mealLogs'), where('date', '==', dateStr));
+  return onSnapshot(q, (snap) => {
+    const list: MealLog[] = snap.docs.map((d) => {
+      const m = d.data();
+      const ingredients = (m.ingredients as MealIngredient[] | undefined) ?? [];
+      return {
+        id: d.id,
+        date: m.date as string,
+        timing: m.timing as MealLog['timing'],
+        name: m.name as string,
+        type: m.type as MealType,
+        calories: Number(m.calories ?? 0),
+        protein: Number(m.protein ?? 0),
+        fat: Number(m.fat ?? 0),
+        carbs: Number(m.carbs ?? 0),
+        fiber: Number(m.fiber ?? 0),
+        ingredients,
+        createdAt: tsToDate(m.createdAt),
+      };
+    });
+    list.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    onMeals(list);
+  });
+}
+
+export function subscribeMealsInRange(
+  uid: string,
+  startDate: string,
+  endDate: string,
+  onMeals: (meals: MealLog[]) => void
+): Unsubscribe {
+  const db = getDb();
+  const q = query(
+    collection(db, 'users', uid, 'mealLogs'),
+    where('date', '>=', startDate),
+    where('date', '<=', endDate)
+  );
+  return onSnapshot(q, (snap) => {
+    const list: MealLog[] = snap.docs.map((d) => {
+      const m = d.data();
+      const ingredients = (m.ingredients as MealIngredient[] | undefined) ?? [];
+      return {
+        id: d.id,
+        date: m.date as string,
+        timing: m.timing as MealLog['timing'],
+        name: m.name as string,
+        type: m.type as MealType,
+        calories: Number(m.calories ?? 0),
+        protein: Number(m.protein ?? 0),
+        fat: Number(m.fat ?? 0),
+        carbs: Number(m.carbs ?? 0),
+        fiber: Number(m.fiber ?? 0),
+        ingredients,
+        createdAt: tsToDate(m.createdAt),
+      };
+    });
+    list.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.getTime() - b.createdAt.getTime());
+    onMeals(list);
+  });
+}
+
+export async function addMealLog(
+  uid: string,
+  payload: {
+    date: string;
+    timing: MealTiming;
+    name: string;
+    type: MealType;
+    calories: number;
+    protein: number;
+    fat: number;
+    carbs: number;
+    fiber: number;
+    ingredients?: MealIngredient[];
+  }
+): Promise<void> {
+  const db = getDb();
+  await addDoc(collection(db, 'users', uid, 'mealLogs'), {
+    ...payload,
+    ingredients: payload.ingredients ?? [],
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteMealLog(uid: string, mealId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'users', uid, 'mealLogs', mealId));
+}
+
+export function subscribeWeightLogs(
+  uid: string,
+  onLogs: (logs: { id: string; date: string; weight: number; createdAt: Date }[]) => void
+): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'users', uid, 'weightLogs'));
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => {
+      const m = d.data();
+      return {
+        id: d.id,
+        date: m.date as string,
+        weight: Number(m.weight ?? 0),
+        createdAt: tsToDate(m.createdAt),
+      };
+    });
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    onLogs(list);
+  });
+}
+
+export async function addWeightLog(uid: string, date: string, weight: number): Promise<void> {
+  await addDoc(collection(getDb(), 'users', uid, 'weightLogs'), {
+    date,
+    weight,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteWeightLog(uid: string, id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'users', uid, 'weightLogs', id));
+}
+
+export function subscribeSizeLogs(uid: string, onLogs: (logs: SizeLog[]) => void): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'users', uid, 'sizeLogs'));
+  return onSnapshot(q, (snap) => {
+    const list: SizeLog[] = snap.docs.map((d) => {
+      const m = d.data();
+      return {
+        id: d.id,
+        date: m.date as string,
+        waist: m.waist != null ? Number(m.waist) : undefined,
+        hip: m.hip != null ? Number(m.hip) : undefined,
+        thigh: m.thigh != null ? Number(m.thigh) : undefined,
+        arm: m.arm != null ? Number(m.arm) : undefined,
+        chest: m.chest != null ? Number(m.chest) : undefined,
+        notes: m.notes as string | undefined,
+        createdAt: tsToDate(m.createdAt),
+      };
+    });
+    list.sort((a, b) => b.date.localeCompare(a.date));
+    onLogs(list);
+  });
+}
+
+export async function addSizeLog(
+  uid: string,
+  payload: {
+    date: string;
+    waist?: number;
+    hip?: number;
+    thigh?: number;
+    arm?: number;
+    chest?: number;
+    notes?: string;
+  }
+): Promise<void> {
+  await addDoc(collection(getDb(), 'users', uid, 'sizeLogs'), {
+    ...payload,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteSizeLog(uid: string, id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'users', uid, 'sizeLogs', id));
+}
+
+export function subscribeRecipes(uid: string, onRecipes: (recipes: Recipe[]) => void): Unsubscribe {
+  const db = getDb();
+  const q = query(collection(db, 'users', uid, 'recipes'));
+  return onSnapshot(q, (snap) => {
+    const list: Recipe[] = snap.docs.map((d) => {
+      const m = d.data();
+      const kindRaw = m.kind as string | undefined;
+      const kind: RecipeKind = kindRaw === 'restaurant' ? 'restaurant' : 'cooking';
+      return {
+        id: d.id,
+        kind,
+        name: m.name as string,
+        servings: Number(m.servings ?? 1),
+        calories: Number(m.calories ?? 0),
+        protein: Number(m.protein ?? 0),
+        fat: Number(m.fat ?? 0),
+        carbs: Number(m.carbs ?? 0),
+        fiber: Number(m.fiber ?? 0),
+        note: m.note as string | undefined,
+        createdAt: tsToDate(m.createdAt),
+      };
+    });
+    list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    onRecipes(list);
+  });
+}
+
+export async function addRecipe(
+  uid: string,
+  payload: Omit<Recipe, 'id' | 'createdAt'>
+): Promise<void> {
+  const { note, ...rest } = payload;
+  await addDoc(collection(getDb(), 'users', uid, 'recipes'), {
+    ...rest,
+    ...(note !== undefined && note !== '' ? { note } : {}),
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteRecipe(uid: string, recipeId: string): Promise<void> {
+  await deleteDoc(doc(getDb(), 'users', uid, 'recipes', recipeId));
+}
