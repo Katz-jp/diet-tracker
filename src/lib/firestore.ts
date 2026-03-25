@@ -233,14 +233,14 @@ export function subscribeSizeLogs(uid: string, onLogs: (logs: SizeLog[]) => void
   return onSnapshot(q, (snap) => {
     const list: SizeLog[] = snap.docs.map((d) => {
       const m = d.data();
+      const bustRaw = m.bust ?? m.chest;
       return {
         id: d.id,
         date: m.date as string,
         waist: m.waist != null ? Number(m.waist) : undefined,
+        lowerAbdomen: m.lowerAbdomen != null ? Number(m.lowerAbdomen) : undefined,
         hip: m.hip != null ? Number(m.hip) : undefined,
-        thigh: m.thigh != null ? Number(m.thigh) : undefined,
-        arm: m.arm != null ? Number(m.arm) : undefined,
-        chest: m.chest != null ? Number(m.chest) : undefined,
+        bust: bustRaw != null ? Number(bustRaw) : undefined,
         notes: m.notes as string | undefined,
         createdAt: tsToDate(m.createdAt),
       };
@@ -255,17 +255,30 @@ export async function addSizeLog(
   payload: {
     date: string;
     waist?: number;
+    lowerAbdomen?: number;
     hip?: number;
-    thigh?: number;
-    arm?: number;
-    chest?: number;
+    bust?: number;
     notes?: string;
   }
 ): Promise<void> {
-  await addDoc(collection(getDb(), 'users', uid, 'sizeLogs'), {
-    ...payload,
+  const data: Record<string, unknown> = {
+    date: payload.date,
     createdAt: serverTimestamp(),
-  });
+  };
+  for (const key of ['waist', 'lowerAbdomen', 'hip', 'bust'] as const) {
+    const v = payload[key];
+    if (v !== undefined && !Number.isNaN(v)) {
+      data[key] = v;
+    }
+  }
+  if (payload.notes !== undefined && payload.notes !== '') {
+    data.notes = payload.notes;
+  }
+  const hasNumber = ['waist', 'lowerAbdomen', 'hip', 'bust'].some((k) => data[k] !== undefined);
+  if (!hasNumber && data.notes === undefined) {
+    throw new Error('少なくとも1つのサイズ（cm）かメモを入力してください。');
+  }
+  await addDoc(collection(getDb(), 'users', uid, 'sizeLogs'), data);
 }
 
 export async function deleteSizeLog(uid: string, id: string): Promise<void> {

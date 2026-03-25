@@ -18,9 +18,10 @@ import {
   saveBodyPhotoSet,
   subscribeBodyPhotoSets,
   subscribeMealsInRange,
+  subscribeSizeLogs,
   subscribeWeightLogs,
 } from '@/lib/firestore';
-import type { BodyPhotoSet, MealLog } from '@/types';
+import type { BodyPhotoSet, MealLog, SizeLog } from '@/types';
 
 const CHART_GRID = 'rgba(255, 209, 209, 0.7)';
 const CHART_TICK = { fill: '#b57878', fontSize: 11 };
@@ -39,10 +40,25 @@ function shortDate(iso: string) {
   return `${m}/${d}`;
 }
 
+function sizeMetricSeries(sizes: SizeLog[], key: 'waist' | 'lowerAbdomen' | 'hip' | 'bust') {
+  return [...sizes]
+    .filter((s) => {
+      const v = s[key];
+      return v != null && !Number.isNaN(v);
+    })
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((s) => ({
+      date: s.date,
+      label: shortDate(s.date),
+      value: s[key] as number,
+    }));
+}
+
 export function GraphPage() {
   const uid = useAuthStore((s) => s.user?.uid);
   const [meals, setMeals] = useState<MealLog[]>([]);
   const [weights, setWeights] = useState<{ id: string; date: string; weight: number; createdAt: Date }[]>([]);
+  const [sizeLogs, setSizeLogs] = useState<SizeLog[]>([]);
   const [bodyPhotoSets, setBodyPhotoSets] = useState<BodyPhotoSet[]>([]);
   const [photoDate, setPhotoDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [fileFront, setFileFront] = useState<File | null>(null);
@@ -67,11 +83,13 @@ export function GraphPage() {
     if (!uid) return;
     const u1 = subscribeMealsInRange(uid, rangeStart, rangeEnd, setMeals);
     const u2 = subscribeWeightLogs(uid, setWeights);
-    const u3 = subscribeBodyPhotoSets(uid, setBodyPhotoSets);
+    const u3 = subscribeSizeLogs(uid, setSizeLogs);
+    const u4 = subscribeBodyPhotoSets(uid, setBodyPhotoSets);
     return () => {
       u1();
       u2();
       u3();
+      u4();
     };
   }, [uid, rangeStart, rangeEnd]);
 
@@ -185,11 +203,23 @@ export function GraphPage() {
     }));
   }, [weights]);
 
+  const waistSeries = useMemo(() => sizeMetricSeries(sizeLogs, 'waist'), [sizeLogs]);
+  const lowerAbdomenSeries = useMemo(() => sizeMetricSeries(sizeLogs, 'lowerAbdomen'), [sizeLogs]);
+  const hipSeries = useMemo(() => sizeMetricSeries(sizeLogs, 'hip'), [sizeLogs]);
+  const bustSeries = useMemo(() => sizeMetricSeries(sizeLogs, 'bust'), [sizeLogs]);
+
+  const sizeCharts: { title: string; data: { label: string; value: number }[]; stroke: string }[] = [
+    { title: 'ウエスト', data: waistSeries, stroke: '#e07070' },
+    { title: '下腹', data: lowerAbdomenSeries, stroke: '#c96a6a' },
+    { title: 'ヒップ', data: hipSeries, stroke: '#8b9fd4' },
+    { title: 'バスト', data: bustSeries, stroke: '#9d7aad' },
+  ];
+
   return (
     <main className="page">
       <h1>グラフ</h1>
       <p className="muted" style={{ marginTop: '-0.5rem' }}>
-        食事は直近30日分の日別合計です。体重は登録がある日のみ表示されます。
+        食事は直近30日分の日別合計です。体重・サイズは登録がある日のみ折れ線で表示されます。
       </p>
 
       <div className="card" style={{ paddingBottom: '1.25rem' }}>
@@ -272,6 +302,31 @@ export function GraphPage() {
           </div>
         )}
       </div>
+
+      <h2 style={{ marginTop: '0.25rem', marginBottom: '0.5rem' }}>サイズ（cm）</h2>
+      <p className="muted" style={{ marginTop: '-0.35rem', marginBottom: '0.75rem' }}>
+        「体重・サイズ」で記録した値の推移です。記録の日だけプロットされます。
+      </p>
+      {sizeCharts.map(({ title, data, stroke }) => (
+        <div key={title} className="card" style={{ paddingBottom: '1.25rem' }}>
+          <h2 style={{ color: 'var(--text)', marginBottom: '0.75rem' }}>{title}</h2>
+          {data.length === 0 ? (
+            <p className="muted">{title}の記録がありません。</p>
+          ) : (
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <LineChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                  <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tick={CHART_TICK} />
+                  <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={CHART_TICK} />
+                  <Tooltip {...chartTooltipProps} />
+                  <Line type="monotone" dataKey="value" name="cm" stroke={stroke} strokeWidth={2} dot />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      ))}
 
       <div className="card">
         <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem' }}>体型写真</h2>

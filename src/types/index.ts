@@ -63,10 +63,11 @@ export interface SizeLog {
   id: string;
   date: string;
   waist?: number;
+  /** 下腹（cm） */
+  lowerAbdomen?: number;
   hip?: number;
-  thigh?: number;
-  arm?: number;
-  chest?: number;
+  /** バスト（cm） */
+  bust?: number;
   notes?: string;
   createdAt: Date;
 }

@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/authStore';
-import {
-  addSizeLog,
-  addWeightLog,
-  deleteSizeLog,
-  deleteWeightLog,
-  subscribeSizeLogs,
-  subscribeWeightLogs,
-} from '@/lib/firestore';
+import { addSizeLog, addWeightLog, deleteSizeLog, subscribeSizeLogs } from '@/lib/firestore';
 import type { SizeLog } from '@/types';
 
 function fmtNum(n?: number) {
@@ -18,19 +11,18 @@ function fmtNum(n?: number) {
 
 export function BodyPage() {
   const uid = useAuthStore((s) => s.user?.uid);
-  const [weights, setWeights] = useState<{ id: string; date: string; weight: number; createdAt: Date }[]>([]);
   const [sizes, setSizes] = useState<SizeLog[]>([]);
 
   const [wDate, setWDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [weight, setWeight] = useState('');
   const [sDate, setSDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [waist, setWaist] = useState('');
+  const [lowerAbdomen, setLowerAbdomen] = useState('');
   const [hip, setHip] = useState('');
-  const [thigh, setThigh] = useState('');
-  const [arm, setArm] = useState('');
-  const [chest, setChest] = useState('');
+  const [bust, setBust] = useState('');
   const [sNotes, setSNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = '体重・サイズ | Diet Tracker';
@@ -38,12 +30,8 @@ export function BodyPage() {
 
   useEffect(() => {
     if (!uid) return;
-    const u1 = subscribeWeightLogs(uid, setWeights);
-    const u2 = subscribeSizeLogs(uid, setSizes);
-    return () => {
-      u1();
-      u2();
-    };
+    const unsub = subscribeSizeLogs(uid, setSizes);
+    return () => unsub();
   }, [uid]);
 
   async function submitWeight(e: React.FormEvent) {
@@ -63,23 +51,24 @@ export function BodyPage() {
   async function submitSize(e: React.FormEvent) {
     e.preventDefault();
     if (!uid) return;
+    setSizeError(null);
     setBusy(true);
     try {
       await addSizeLog(uid, {
         date: sDate,
         waist: waist !== '' ? Number(waist) : undefined,
+        lowerAbdomen: lowerAbdomen !== '' ? Number(lowerAbdomen) : undefined,
         hip: hip !== '' ? Number(hip) : undefined,
-        thigh: thigh !== '' ? Number(thigh) : undefined,
-        arm: arm !== '' ? Number(arm) : undefined,
-        chest: chest !== '' ? Number(chest) : undefined,
+        bust: bust !== '' ? Number(bust) : undefined,
         notes: sNotes.trim() || undefined,
       });
       setWaist('');
+      setLowerAbdomen('');
       setHip('');
-      setThigh('');
-      setArm('');
-      setChest('');
+      setBust('');
       setSNotes('');
+    } catch (err) {
+      setSizeError(err instanceof Error ? err.message : '保存に失敗しました');
     } finally {
       setBusy(false);
     }
@@ -114,30 +103,27 @@ export function BodyPage() {
 
       <form onSubmit={submitSize} className="card">
         <h2 style={{ color: 'var(--text)', marginBottom: '0.75rem' }}>サイズ（cm）</h2>
+        {sizeError ? <div className="error-banner" style={{ marginBottom: '0.75rem' }}>{sizeError}</div> : null}
         <div className="field">
           <label htmlFor="sd">日付</label>
           <input id="sd" type="date" value={sDate} onChange={(e) => setSDate(e.target.value)} />
         </div>
         <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: '1 1 100px' }}>
-            <label>ウエスト</label>
-            <input value={waist} onChange={(e) => setWaist(e.target.value)} inputMode="decimal" />
+            <label htmlFor="sz-waist">ウエスト</label>
+            <input id="sz-waist" value={waist} onChange={(e) => setWaist(e.target.value)} inputMode="decimal" />
           </div>
           <div className="field" style={{ flex: '1 1 100px' }}>
-            <label>ヒップ</label>
-            <input value={hip} onChange={(e) => setHip(e.target.value)} inputMode="decimal" />
+            <label htmlFor="sz-low">下腹</label>
+            <input id="sz-low" value={lowerAbdomen} onChange={(e) => setLowerAbdomen(e.target.value)} inputMode="decimal" />
           </div>
           <div className="field" style={{ flex: '1 1 100px' }}>
-            <label>太もも</label>
-            <input value={thigh} onChange={(e) => setThigh(e.target.value)} inputMode="decimal" />
+            <label htmlFor="sz-hip">ヒップ</label>
+            <input id="sz-hip" value={hip} onChange={(e) => setHip(e.target.value)} inputMode="decimal" />
           </div>
           <div className="field" style={{ flex: '1 1 100px' }}>
-            <label>腕</label>
-            <input value={arm} onChange={(e) => setArm(e.target.value)} inputMode="decimal" />
-          </div>
-          <div className="field" style={{ flex: '1 1 100px' }}>
-            <label>胸</label>
-            <input value={chest} onChange={(e) => setChest(e.target.value)} inputMode="decimal" />
+            <label htmlFor="sz-bust">バスト</label>
+            <input id="sz-bust" value={bust} onChange={(e) => setBust(e.target.value)} inputMode="decimal" />
           </div>
         </div>
         <div className="field">
@@ -149,29 +135,6 @@ export function BodyPage() {
         </button>
       </form>
 
-      <h2>体重の履歴</h2>
-      {weights.length === 0 ? (
-        <p className="muted">まだ記録がありません。</p>
-      ) : (
-        weights.map((w) => (
-          <div key={w.id} className="card">
-            <div className="row">
-              <span>
-                <strong>{w.date}</strong> — {w.weight.toFixed(1)} kg
-              </span>
-              <button
-                type="button"
-                className="btn btn-danger btn-ghost"
-                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                onClick={() => uid && deleteWeightLog(uid, w.id)}
-              >
-                削除
-              </button>
-            </div>
-          </div>
-        ))
-      )}
-
       <h2 style={{ marginTop: '1.25rem' }}>サイズの履歴</h2>
       {sizes.length === 0 ? (
         <p className="muted">まだ記録がありません。</p>
@@ -182,8 +145,8 @@ export function BodyPage() {
               <div>
                 <strong>{s.date}</strong>
                 <p style={{ margin: '0.45rem 0 0', fontSize: '0.9rem' }}>
-                  ウエスト {fmtNum(s.waist)} ／ ヒップ {fmtNum(s.hip)} ／ 太もも {fmtNum(s.thigh)} ／ 腕{' '}
-                  {fmtNum(s.arm)} ／ 胸 {fmtNum(s.chest)} cm
+                  ウエスト {fmtNum(s.waist)} ／ 下腹 {fmtNum(s.lowerAbdomen)} ／ ヒップ {fmtNum(s.hip)} ／ バスト{' '}
+                  {fmtNum(s.bust)} cm
                 </p>
                 {s.notes ? <p className="muted" style={{ margin: '0.35rem 0 0' }}>{s.notes}</p> : null}
               </div>
