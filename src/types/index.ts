@@ -75,6 +75,18 @@ export interface SizeLog {
 /** 保存レシピの分類（食事追加の「いつもの自炊／いつもの外食」に対応） */
 export type RecipeKind = 'cooking' | 'restaurant';
 
+/** 材料の分量の単位（g または 個） */
+export type RecipeIngredientUnit = 'g' | 'piece';
+
+/** レシピ登録の材料1行 */
+export interface RecipeIngredientLine {
+  name: string;
+  /** 数値部分（例: 200、2） */
+  amount: string;
+  /** 未設定のレシピは従来どおり amount に「250g」などを含む場合がある */
+  unit?: RecipeIngredientUnit;
+}
+
 export interface Recipe {
   id: string;
   kind: RecipeKind;
@@ -86,6 +98,8 @@ export interface Recipe {
   carbs: number;
   fiber: number;
   note?: string;
+  /** いつもの自炊で入力した材料（任意） */
+  ingredients?: RecipeIngredientLine[];
   createdAt: Date;
 }
 

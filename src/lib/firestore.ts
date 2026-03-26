@@ -293,6 +293,25 @@ export function subscribeRecipes(uid: string, onRecipes: (recipes: Recipe[]) => 
       const m = d.data();
       const kindRaw = m.kind as string | undefined;
       const kind: RecipeKind = kindRaw === 'restaurant' ? 'restaurant' : 'cooking';
+      const rawIng = m.ingredients;
+      let ingredients: Recipe['ingredients'];
+      if (Array.isArray(rawIng)) {
+        const parsed = rawIng
+          .map((row) => {
+            if (!row || typeof row !== 'object') return null;
+            const o = row as Record<string, unknown>;
+            const name = typeof o.name === 'string' ? o.name : '';
+            const amount = typeof o.amount === 'string' ? o.amount : '';
+            const u = o.unit;
+            const unit =
+              u === 'piece' || u === 'g' ? (u as 'g' | 'piece') : undefined;
+            if (!name.trim() && !amount.trim()) return null;
+            return { name, amount, ...(unit !== undefined ? { unit } : {}) };
+          })
+          .filter((x): x is { name: string; amount: string } => x !== null);
+        ingredients = parsed.length > 0 ? parsed : undefined;
+      }
+
       return {
         id: d.id,
         kind,
@@ -304,6 +323,7 @@ export function subscribeRecipes(uid: string, onRecipes: (recipes: Recipe[]) => 
         carbs: Number(m.carbs ?? 0),
         fiber: Number(m.fiber ?? 0),
         note: m.note as string | undefined,
+        ingredients,
         createdAt: tsToDate(m.createdAt),
       };
     });
@@ -316,10 +336,11 @@ export async function addRecipe(
   uid: string,
   payload: Omit<Recipe, 'id' | 'createdAt'>
 ): Promise<void> {
-  const { note, ...rest } = payload;
+  const { note, ingredients, ...rest } = payload;
   await addDoc(collection(getDb(), 'users', uid, 'recipes'), {
     ...rest,
     ...(note !== undefined && note !== '' ? { note } : {}),
+    ...(ingredients !== undefined && ingredients.length > 0 ? { ingredients } : {}),
     createdAt: serverTimestamp(),
   });
 }

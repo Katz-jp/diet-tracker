@@ -89,3 +89,56 @@ JSON形式で返却してください。
 }`
   );
 }
+
+/** 材料リストから「料理全体の合計」栄養を推定（レシピ保存の合計値・人数分母に合わせる） */
+export interface RecipeIngredientsNutritionEstimate {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  note: string;
+}
+
+export async function estimateNutritionFromRecipeIngredients(
+  recipeName: string,
+  servings: number,
+  ingredients: { name: string; amount: string; unit?: 'g' | 'piece' }[]
+): Promise<RecipeIngredientsNutritionEstimate> {
+  function formatAmount(i: { amount: string; unit?: 'g' | 'piece' }): string {
+    const a = i.amount.trim();
+    if (!a) return '分量不明';
+    if (i.unit === 'piece') return `${a} 個`;
+    if (i.unit === 'g') return `${a} g`;
+    return a;
+  }
+
+  const lines = ingredients
+    .filter((i) => i.name.trim() || i.amount.trim())
+    .map(
+      (i) =>
+        `- ${i.name.trim() || '（名称不明）'}: ${formatAmount(i)}`
+    )
+    .join('\n');
+
+  return chatJson<RecipeIngredientsNutritionEstimate>(
+    'あなたは日本の食品の栄養計算に詳しいアシスタントです。必ず有効なJSONオブジェクトのみを返してください。材料の分量が曖昧な場合は日本の一般的な目安で推定し、noteに前提を簡潔に書いてください。',
+    `次のレシピについて、材料をすべて使い切る「1回作ったときの料理全体」の栄養の合計を推定してください。
+（人数 ${servings} は1人前の基準人数であり、栄養の合計を人数で割るのは利用者側の計算です。あなたが返す数値は必ず「材料リスト全体の合計」にしてください。）
+
+レシピ名：${recipeName || '（未入力）'}
+
+材料：
+${lines || '（材料なし）'}
+
+返却形式（数値は小数可、単位は kcal / g）：
+{
+  "calories": 数値,
+  "protein": 数値,
+  "fat": 数値,
+  "carbs": 数値,
+  "fiber": 数値,
+  "note": "推定の前提や注意"
+}`
+  );
+}
