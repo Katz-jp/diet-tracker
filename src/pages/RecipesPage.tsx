@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { ServingsStepper } from '@/components/ServingsStepper';
-import { addRecipe, deleteRecipe, subscribeRecipes } from '@/lib/firestore';
+import { addRecipe, deleteRecipe, updateRecipe, subscribeRecipes } from '@/lib/firestore';
 import { snapServingsToQuarter } from '@/lib/servingsInput';
 import { estimateNutritionFromRecipeIngredients } from '@/lib/openai';
 import type { Recipe, RecipeIngredientLine, RecipeIngredientUnit, RecipeKind } from '@/types';
@@ -35,6 +35,7 @@ export function RecipesPage() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +56,50 @@ export function RecipesPage() {
         unit: r.unit,
       }))
       .filter((r) => r.name !== '' || r.amount !== '');
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setName('');
+    setServings(1);
+    setIngredientRows([newIngredientRow()]);
+    setCalories(0);
+    setProtein(0);
+    setFat(0);
+    setCarbs(0);
+    setFiber(0);
+    setNote('');
+    setError(null);
+  }
+
+  function startEdit(r: Recipe) {
+    setEditingId(r.id);
+    setFormKind(r.kind);
+    setName(r.name);
+    setServings(r.servings);
+    if (r.ingredients && r.ingredients.length > 0) {
+      setIngredientRows(
+        r.ingredients.map((ing) => ({
+          id: crypto.randomUUID(),
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit ?? 'g',
+        }))
+      );
+    } else {
+      setIngredientRows([newIngredientRow()]);
+    }
+    // 保存値は全体合計なので、1人前に戻す
+    const div = r.kind === 'cooking' ? r.servings : 1;
+    const round1 = (x: number) => Math.round((x / div) * 10) / 10;
+    setCalories(round1(r.calories));
+    setProtein(round1(r.protein));
+    setFat(round1(r.fat));
+    setCarbs(round1(r.carbs));
+    setFiber(round1(r.fiber));
+    setNote(r.note ?? '');
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   /** 自炊のみ：人数を変えても「料理全体の栄養の合計」が変わらないよう、1人前を按分する */
@@ -120,7 +165,7 @@ export function RecipesPage() {
       const portions = snapServingsToQuarter(servings);
       const per = (n: number) => Number(n) || 0;
       const scaleCooking = formKind === 'cooking' ? portions : 1;
-      await addRecipe(uid, {
+      const payload = {
         kind: formKind,
         name: name.trim(),
         servings: portions,
@@ -131,16 +176,13 @@ export function RecipesPage() {
         fiber: per(fiber) * scaleCooking,
         note: note.trim() || undefined,
         ...(ing.length > 0 ? { ingredients: ing } : {}),
-      });
-      setName('');
-      setServings(1);
-      setIngredientRows([newIngredientRow()]);
-      setCalories(0);
-      setProtein(0);
-      setFat(0);
-      setCarbs(0);
-      setFiber(0);
-      setNote('');
+      };
+      if (editingId) {
+        await updateRecipe(uid, editingId, payload);
+      } else {
+        await addRecipe(uid, payload);
+      }
+      resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存に失敗しました');
     } finally {
@@ -169,7 +211,16 @@ export function RecipesPage() {
       {error ? <div className="error-banner">{error}</div> : null}
 
       <form onSubmit={onSubmit} className="card">
-        <h2 style={{ color: 'var(--text)', marginBottom: '0.75rem' }}>新規登録</h2>
+        <div className="row" style={{ marginBottom: '0.75rem', alignItems: 'center' }}>
+          <h2 style={{ color: 'var(--text)', margin: 0 }}>
+            {editingId ? 'レシピを編集' : '新規登録'}
+          </h2>
+          {editingId ? (
+            <button type="button" className="btn btn-ghost" onClick={resetForm}>
+              キャンセル
+            </button>
+          ) : null}
+        </div>
         <div className="field">
           <span>保存先</span>
           <div className="tabs" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
@@ -349,7 +400,7 @@ export function RecipesPage() {
           <textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? '保存中…' : 'レシピを保存'}
+          {saving ? '保存中…' : editingId ? '更新する' : 'レシピを保存'}
         </button>
       </form>
 
@@ -389,15 +440,25 @@ export function RecipesPage() {
                   ) : null}
                   {r.note ? <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>{r.note}</p> : null}
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-ghost"
-                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                  disabled={deleting === r.id}
-                  onClick={() => onDelete(r.id)}
-                >
-                  削除
-                </button>
+                <div className="row" style={{ gap: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                    onClick={() => startEdit(r)}
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-ghost"
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                    disabled={deleting === r.id}
+                    onClick={() => onDelete(r.id)}
+                  >
+                    削除
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -420,15 +481,25 @@ export function RecipesPage() {
                   </div>
                   {r.note ? <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>{r.note}</p> : null}
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-ghost"
-                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                  disabled={deleting === r.id}
-                  onClick={() => onDelete(r.id)}
-                >
-                  削除
-                </button>
+                <div className="row" style={{ gap: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                    onClick={() => startEdit(r)}
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-ghost"
+                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                    disabled={deleting === r.id}
+                    onClick={() => onDelete(r.id)}
+                  >
+                    削除
+                  </button>
+                </div>
               </div>
             </div>
           ))

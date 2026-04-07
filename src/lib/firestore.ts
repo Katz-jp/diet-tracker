@@ -345,6 +345,19 @@ export async function addRecipe(
   });
 }
 
+export async function updateRecipe(
+  uid: string,
+  recipeId: string,
+  payload: Omit<Recipe, 'id' | 'createdAt'>
+): Promise<void> {
+  const { note, ingredients, ...rest } = payload;
+  await setDoc(doc(getDb(), 'users', uid, 'recipes', recipeId), {
+    ...rest,
+    ...(note !== undefined && note !== '' ? { note } : {}),
+    ...(ingredients !== undefined && ingredients.length > 0 ? { ingredients } : {}),
+  }, { merge: false });
+}
+
 export async function deleteRecipe(uid: string, recipeId: string): Promise<void> {
   await deleteDoc(doc(getDb(), 'users', uid, 'recipes', recipeId));
 }
