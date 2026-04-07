@@ -37,6 +37,8 @@ export function RecipesPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cookingOpen, setCookingOpen] = useState(true);
+  const [restaurantOpen, setRestaurantOpen] = useState(true);
 
   useEffect(() => {
     document.title = 'いつものレシピ | Diet Tracker';
@@ -263,10 +265,15 @@ export function RecipesPage() {
             {ingredientRows.map((row, index) => (
               <div
                 key={row.id}
-                className="row"
-                style={{ gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '0.5rem' }}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 4.5rem 4rem 2.2rem',
+                  gap: '0.4rem',
+                  alignItems: 'end',
+                  marginBottom: '0.5rem',
+                }}
               >
-                <div className="field" style={{ flex: '1 1 140px', marginBottom: 0 }}>
+                <div className="field" style={{ marginBottom: 0 }}>
                   <label htmlFor={`ing-n-${row.id}`}>材料名</label>
                   <input
                     id={`ing-n-${row.id}`}
@@ -280,7 +287,7 @@ export function RecipesPage() {
                     placeholder="例：鶏むね肉"
                   />
                 </div>
-                <div className="field" style={{ flex: '1 1 88px', marginBottom: 0 }}>
+                <div className="field" style={{ marginBottom: 0 }}>
                   <label htmlFor={`ing-a-${row.id}`}>分量</label>
                   <input
                     id={`ing-a-${row.id}`}
@@ -292,10 +299,10 @@ export function RecipesPage() {
                         rows.map((r) => (r.id === row.id ? { ...r, amount: v } : r))
                       );
                     }}
-                    placeholder={row.unit === 'piece' ? '例：2' : '例：250'}
+                    placeholder={row.unit === 'piece' ? '2' : '250'}
                   />
                 </div>
-                <div className="field" style={{ flex: '0 0 5.5rem', marginBottom: 0 }}>
+                <div className="field" style={{ marginBottom: 0 }}>
                   <label htmlFor={`ing-u-${row.id}`}>単位</label>
                   <select
                     id={`ing-u-${row.id}`}
@@ -314,14 +321,14 @@ export function RecipesPage() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  style={{ padding: '0.45rem 0.65rem' }}
+                  style={{ padding: '0.45rem 0', fontSize: '1rem', lineHeight: 1 }}
                   disabled={ingredientRows.length <= 1}
                   onClick={() =>
                     setIngredientRows((rows) => rows.filter((r) => r.id !== row.id))
                   }
                   aria-label={`材料${index + 1}行を削除`}
                 >
-                  削除
+                  ×
                 </button>
               </div>
             ))}
@@ -404,10 +411,30 @@ export function RecipesPage() {
         </button>
       </form>
 
-      <h2 style={{ marginTop: '1.5rem' }}>保存済み（いつもの自炊）</h2>
-      {recipes.filter((r) => r.kind === 'cooking').length === 0 ? (
+      <button
+        type="button"
+        onClick={() => setCookingOpen((o) => !o)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '0',
+          marginTop: '1.5rem',
+          width: '100%',
+          textAlign: 'left',
+        }}
+      >
+        <h2 style={{ margin: 0, color: 'var(--text)' }}>保存済み（いつもの自炊）</h2>
+        <span style={{ fontSize: '0.85rem', color: 'var(--muted)', marginLeft: 'auto' }}>
+          {cookingOpen ? '▲ 閉じる' : '▼ 開く'}
+        </span>
+      </button>
+      {cookingOpen && recipes.filter((r) => r.kind === 'cooking').length === 0 ? (
         <p className="muted">まだありません。</p>
-      ) : (
+      ) : cookingOpen ? (
         recipes
           .filter((r) => r.kind === 'cooking')
           .map((r) => (
@@ -462,12 +489,32 @@ export function RecipesPage() {
               </div>
             </div>
           ))
-      )}
+      ) : null}
 
-      <h2 style={{ marginTop: '1.5rem' }}>保存済み（いつもの外食）</h2>
-      {recipes.filter((r) => r.kind === 'restaurant').length === 0 ? (
+      <button
+        type="button"
+        onClick={() => setRestaurantOpen((o) => !o)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '0',
+          marginTop: '1.5rem',
+          width: '100%',
+          textAlign: 'left',
+        }}
+      >
+        <h2 style={{ margin: 0, color: 'var(--text)' }}>保存済み（いつもの外食）</h2>
+        <span style={{ fontSize: '0.85rem', color: 'var(--muted)', marginLeft: 'auto' }}>
+          {restaurantOpen ? '▲ 閉じる' : '▼ 開く'}
+        </span>
+      </button>
+      {restaurantOpen && recipes.filter((r) => r.kind === 'restaurant').length === 0 ? (
         <p className="muted">まだありません。</p>
-      ) : (
+      ) : restaurantOpen ? (
         recipes
           .filter((r) => r.kind === 'restaurant')
           .map((r) => (
@@ -503,7 +550,7 @@ export function RecipesPage() {
               </div>
             </div>
           ))
-      )}
+      ) : null}
     </main>
   );
 }
